@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>이차방정식 빈출 (4)</title>
+  <!-- MathJax 로드 -->
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+  <style>
+    /* 흑백 색상 테마 */
+    body {
+      background-color: black;
+      color: white;
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    input, button, select {
+      background-color: white;
+      color: black;
+      border: 1px solid #444;
+      padding: 5px 10px;
+      margin: 5px 0;
+    }
+    #quiz-container, #game-over-screen, #response, #main-screen, #score-submit-section {
+      margin-top: 20px;
+    }
+    .hidden {
+      display: none;
+    }
+    .question-box {
+      margin: 15px 0;
+      padding: 10px;
+      border: 1px solid white;
+    }
+    .choices-container button {
+      display: block;
+      margin: 5px 0;
+      text-align: left;
+      width: 100%;
+    }
+    .energy-bar-container {
+      width: 300px; 
+      height: 20px; 
+      background-color: white;
+      margin: 10px 0;
+      position: relative;
+    }
+    .energy-bar-fill {
+      position: absolute;
+      top: 0; left: 0;
+      height: 100%;
+      background-color: black;
+      width: 100%;
+    }
+    .status-line {
+      margin: 10px 0;
+    }
+    #next-button {
+      margin-top: 10px;
+    }
+    #total-time-display {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    #lives-display {
+      font-weight: bold;
+    }
+    #difficulty-select, #name-input {
+      margin: 10px 0;
+    }
+    #game-over-screen, #score-submit-section {
+      border: 1px solid white;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+<h1>이차방정식 빈출 (4)</h1>
+
+<!-- 첫 화면: 이름 입력, 난이도 선택 -->
+<div id="main-screen">
+  <label>이름을 입력하세요:</label><br/>
+  <input type="text" id="name-input" placeholder="이름" /><br/><br/>
+
+  <label>난이도를 선택하세요:</label><br/>
+  <select id="difficulty-select">
+    <option value="top">최상 (20초)</option>
+    <option value="high">상 (30초)</option>
+    <option value="mid">중 (40초)</option>
+    <option value="low">하 (시간 제한 없음)</option>
+  </select><br/>
+
+  <button id="start-button">게임 시작</button>
+</div>
+
+<!-- 퀴즈 화면 -->
+<div id="quiz-container" class="hidden">
+  <div class="status-line">
+    <span id="lives-display">남은 기회: 3</span>
+  </div>
+  <div class="status-line">
+    <span>현재 점수: <span id="score">0</span> 점</span>
+  </div>
+  <div id="total-time-display">총 경과시간: 00:00</div>
+
+  <div id="energy-bar" class="energy-bar-container hidden">
+    <div id="energy-fill" class="energy-bar-fill"></div>
+  </div>
+
+  <div id="question-container" class="question-box"></div>
+  <div class="choices-container" id="choices-container"></div>
+
+  <div id="feedback"></div>
+  <button id="next-button" class="hidden">다음 문제</button>
+</div>
+
+<!-- 게임 오버 화면 -->
+<div id="game-over-screen" class="hidden">
+  <h2>게임 종료</h2>
+  <p id="final-score"></p>
+  <button id="score-send-button">점수전송</button>
+</div>
+
+<!-- 점수 전송 결과 -->
+<div id="score-submit-section" class="hidden">
+  <h3>전송 결과</h3>
+  <pre id="response" style="white-space: pre-wrap;"></pre>
+</div>
+
+<script>
+/* 
+  문제 리스트 (무작위 출제)
+  각 문제는 {questionHTML, choices, correctIndex} 형식.
+  LaTeX 수식은 \\(...\\) 로 감싸주세요.
+  분수 등은 \\dfrac{}{} 식으로.
+*/
+
+const problems = [
+  {
+    questionHTML: "\\(y = x^2 - x + 3\\)와 \\(y = kx -1\\)이 한 점에서 접할 때 (\\(k>0\\)), 접점 \\((a,b)\\)에 대하여 \\(k + ab\\)의 값은?",
+    choices: [
+      "\\(10\\)",
+      "\\(11\\)",
+      "\\(12\\)",
+      "\\(13\\)",
+      "\\(14\\)"
+    ],
+    correctIndex: 3 // 13
+  },
+  {
+    questionHTML: "\\(y = x^2 - 9x + a\\)와 \\(y = -x + 3\\)가 접할 때, \\(a\\)의 값은?",
+    choices: [
+      "\\(16\\)",
+      "\\(17\\)",
+      "\\(18\\)",
+      "\\(19\\)",
+      "\\(20\\)"
+    ],
+    correctIndex: 3 // 19
+  },
+  {
+    questionHTML: "점 \\((-1, 0)\\)을 지나고 기울기가 \\(m\\)인 직선이 \\(y = x^2 + x + 4\\)에 접할 때, 양수 \\(m\\)은?",
+    choices: [
+      "\\(\\dfrac{3}{2}\\)",
+      "\\(2\\)",
+      "\\(\\dfrac{5}{2}\\)",
+      "\\(3\\)",
+      "\\(\\dfrac{7}{2}\\)"
+    ],
+    correctIndex: 3 // 3
+  },
+  {
+    questionHTML: "\\(y=-x^2\\)을 x축 대칭이동 후 x축으로 4만큼, y축으로 \\(m\\)만큼 평행이동한 그래프가 \\(y=2x+3\\)에 접할 때, \\(m\\)의 값은?",
+    choices: [
+      "\\(8\\)",
+      "\\(9\\)",
+      "\\(10\\)",
+      "\\(11\\)",
+      "\\(12\\)"
+    ],
+    correctIndex: 4 // 12
+  },
+  {
+    questionHTML: "\\(y = x^2 - 2x -1\\)과 \\(y=x-2\\)가 서로 다른 두 점 \\((a,b), (c,d)\\)에서 만날 때, \\(ad + bc\\)의 값은?",
+    choices: [
+      "\\(-4\\)",
+      "\\(-2\\)",
+      "\\(0\\)",
+      "\\(2\\)",
+      "\\(4\\)"
+    ],
+    correctIndex: 0 // -4
+  },
+  {
+    questionHTML: "\\(f(x)=\\bigl|x^2 -3x -4\\bigr|\\)과 \\(y=2x + k\\)가 서로 다른 네 점에서 만나도록 하는 정수 \\(k\\)의 개수는?",
+    choices: [
+      "\\(1\\)",
+      "\\(2\\)",
+      "\\(3\\)",
+      "\\(4\\)",
+      "\\(5\\)"
+    ],
+    correctIndex: 1 // 2
+  },
+  {
+    questionHTML: "길이 100m인 트랙에서 A,B가 반대방향으로 걸으며, \\(t\\)분 후 이동거리가 각각 \\(t^2+3t\\), \\(17t\\)m일 때, 30분 동안 만나는 횟수?",
+    choices: [
+      "\\(13\\)",
+      "\\(15\\)",
+      "\\(17\\)",
+      "\\(19\\)",
+      "\\(21\\)"
+    ],
+    correctIndex: 1 // 15
+  },
+  {
+    questionHTML: "\\(-2\\le x\\le 1\\)에서 \\(y=-x^2 + ax\\)의 최솟값이 \\(-10\\)이다. (\\(a\\ge2\\)) 이때 \\(a\\)의 값은?",
+    choices: [
+      "\\(2\\)",
+      "\\(3\\)",
+      "\\(4\\)",
+      "\\(5\\)",
+      "\\(6\\)"
+    ],
+    correctIndex: 1 // 3
+  },
+  {
+    questionHTML: "\\(-1\\le x\\le 6\\)에서 \\(y=\\bigl|x^2 -4x -5\\bigr|\\)의 최대값+최솟값은?",
+    choices: [
+      "\\(6\\)",
+      "\\(7\\)",
+      "\\(8\\)",
+      "\\(9\\)",
+      "\\(10\\)"
+    ],
+    correctIndex: 3 // 9
+  },
+  {
+    questionHTML: "\\(0\\le x\\le4\\)에서 \\(f(x)= x^2 -6x + k\\)의 최대값이 17일 때, \\(f(x)\\)의 최솟값은?",
+    choices: [
+      "\\(4\\)",
+      "\\(5\\)",
+      "\\(6\\)",
+      "\\(7\\)",
+      "\\(8\\)"
+    ],
+    correctIndex: 4 // 8
+  },
+  {
+    questionHTML: "다항식 \\(P(x)\\)가 (가) \\(P(x)\\ge -2x-3\\)의 해가 \\(0\\le x\\le1\\), (나) \\(P(x)=-3x-2\\)가 중근을 가질 때, \\(P(-1)\\)은?",
+    choices: [
+      "\\(-3\\)",
+      "\\(-4\\)",
+      "\\(-5\\)",
+      "\\(-7\\)"
+    ],
+    correctIndex: 0 // -3
+  },
+  {
+    questionHTML: "\\(f(x)=-2x^2 +4x +a\\)가 \\(x=b\\)에서 최댓값 4를 가질 때, \\(a+b\\)는?",
+    choices: [
+      "\\(1\\)",
+      "\\(2\\)",
+      "\\(3\\)",
+      "\\(4\\)",
+      "\\(5\\)"
+    ],
+    correctIndex: 2 // 3
+  },
+  {
+    questionHTML: "\\(0\\le x\\le3\\)에서 \\(f(x)= (2x-3)^2 -2(2x-3)+5\\)의 최대+최솟값은?",
+    choices: [
+      "\\(21\\)",
+      "\\(23\\)",
+      "\\(24\\)",
+      "\\(25\\)",
+      "\\(25\\)"
+    ],
+    correctIndex: 2 // 24
+  },
+  {
+    questionHTML: "\\(y=x^2 +2ax +b\\)가 \\(x=3\\)에서 최솟값 -2를 가질 때, \\(a+b\\)는?",
+    choices: [
+      "\\(1\\)",
+      "\\(2\\)",
+      "\\(3\\)",
+      "\\(4\\)",
+      "\\(5\\)"
+    ],
+    correctIndex: 3 // 4
+  },
+  {
+    questionHTML: "\\(y=x^2 -2x\\)를 x축으로 \\(-2\\)만큼, y축으로 \\(-1\\)만큼 평행이동한 곡선과 직선 \\(y=mx\\)가 두 점 \\(P,Q\\)에서 만나는데, \\(PQ\\)의 중점이 원점이면 \\(m\\)은?",
+    choices: [
+      "\\(-2\\)",
+      "\\(-1\\)",
+      "\\(0\\)",
+      "\\(1\\)",
+      "\\(2\\)"
+    ],
+    correctIndex: 1 // -1
+  },
+  {
+    questionHTML: "\\(y=x^2 +3\\)이 \\(y=kx\\)보다 항상 위쪽에 존재하도록 하는 정수 \\(k\\)의 개수는?",
+    choices: [
+      "\\(3\\)",
+      "\\(5\\)",
+      "\\(7\\)",
+      "\\(9\\)",
+      "\\(11\\)"
+    ],
+    correctIndex: 2 // 7
+  },
+  {
+    // 수정된 문제
+    questionHTML: "\\(y=x^2 -4kx +4k^2 +k\\)와 \\(y=2ax +b\\)가 (\\(k\\)값과 무관하게) 항상 접한다. 이때 \\(a+b\\)는?",
+    choices: [
+      "\\(1\\)",
+      "\\(2\\)",
+      "\\(3\\)",
+      "\\(\\dfrac{1}{4}\\)",
+      "\\(\\dfrac{3}{16}\\)"
+    ],
+    correctIndex: 4 // 3/16
+  },
+  {
+    questionHTML: "\\(y=x^2 +x\\)과 \\(y=mx\\)의 교점 x좌표 차가 4가 되도록 하는 모든 \\(m\\)의 합은?",
+    choices: [
+      "\\(1\\)",
+      "\\(2\\)",
+      "\\(3\\)",
+      "\\(4\\)",
+      "\\(5\\)"
+    ],
+    correctIndex: 1 // 2
+  },
+  {
+    questionHTML: "\\(y=x^2\\)와 \\(y=mx-4\\)의 교점이 \\(\\alpha,\\beta\\) (\\(\\alpha<\\beta\\))이고 \\(\\alpha+\\beta=6\\)일 때, \\(m(\\beta-\\alpha)\\)는?",
+    choices: [
+      "\\(4\\sqrt{5}\\)",
+      "\\(6\\sqrt{5}\\)",
+      "\\(8\\sqrt{5}\\)",
+      "\\(10\\sqrt{5}\\)",
+      "\\(12\\sqrt{5}\\)"
+    ],
+    correctIndex: 4 // 12 sqrt(5)
+  },
+  {
+    questionHTML: "두 이차함수 \\(y=f(x), y=g(x)\\)의 교점 x좌표가 -2,4일 때, \\(f(2x)=g(2x)\\)의 모든 실근의 곱은?",
+    choices: [
+      "\\(-10\\)",
+      "\\(-8\\)",
+      "\\(-6\\)",
+      "\\(-4\\)",
+      "\\(-2\\)"
+    ],
+    correctIndex: 4 // -2
+  },
+  {
+    questionHTML: "\\(f(x)=x^2 +4x +3\\)과 \\(y=-2x +k\\)가 서로 다른 두 점 \\(P,Q\\)에서 만나고, \\(P\\)가 \\(f(x)\\)의 꼭짓점일 때 \\(PQ\\) 길이는?",
+    choices: [
+      "\\(\\sqrt{5}\\)",
+      "\\(2\\sqrt{5}\\)",
+      "\\(3\\sqrt{5}\\)",
+      "\\(4\\sqrt{5}\\)",
+      "\\(5\\sqrt{5}\\)"
+    ],
+    correctIndex: 1 // 2 sqrt(5)
+  },
+  {
+    questionHTML: "\\(0\\le x\\le2\\)에서 \\(f(x)=x^2 -4px\\)의 최솟값을 \\(g(p)\\)라 하자. \\(g(-1)+ g\\bigl(\\tfrac{1}{2}\\bigr)\\)은?",
+    choices: [
+      "\\(-3\\)",
+      "\\(-2\\)",
+      "\\(-1\\)",
+      "\\(0\\)",
+      "\\(1\\)"
+    ],
+    correctIndex: 2 // -1
+  },
+  {
+    questionHTML: "\\(y=x^2 -6x +k\\)가 x축과 만나서 생기는 서로 다른 두 점 \\(A,B\\)에 대해 \\(\\overline{AB}=2\\sqrt{10}\\)일 때, \\(k\\)의 값은?",
+    choices: [
+      "\\(-4\\)",
+      "\\(-2\\)",
+      "\\(-1\\)",
+      "\\(0\\)",
+      "\\(4\\)"
+    ],
+    correctIndex: 2 // -1
+  }
+];
+
+// 난이도별 문제당 점수와 제한시간(초)
+const difficultySettings = {
+  "top": { timeLimit: 20, scorePerProblem: 20 },
+  "high": { timeLimit: 30, scorePerProblem: 15 },
+  "mid": { timeLimit: 40, scorePerProblem: 13 },
+  "low": { timeLimit: Infinity, scorePerProblem: 10 }
+};
+
+let playerName = "";
+let difficulty = "low";
+let timeLimitPerQuestion = Infinity; // default
+let scorePerCorrect = 10;
+let score = 0;
+let lives = 3;
+let currentProblemIndex = 0;
+let usedCount = 0; // how many unique problems used so far
+let allUsed = false; // after we use all problems once, we keep random
+
+// total game time
+let totalTime = 0; // in seconds
+let totalTimeInterval = null;
+
+// question timer
+let questionTime = 0;
+let questionTimerInterval = null;
+
+// DOM
+const mainScreen = document.getElementById("main-screen");
+const quizContainer = document.getElementById("quiz-container");
+const questionContainer = document.getElementById("question-container");
+const choicesContainer = document.getElementById("choices-container");
+const feedback = document.getElementById("feedback");
+const nextButton = document.getElementById("next-button");
+const livesDisplay = document.getElementById("lives-display");
+const scoreDisplay = document.getElementById("score");
+const totalTimeDisplay = document.getElementById("total-time-display");
+const energyBar = document.getElementById("energy-bar");
+const energyFill = document.getElementById("energy-fill");
+const gameOverScreen = document.getElementById("game-over-screen");
+const finalScoreText = document.getElementById("final-score");
+const scoreSubmitSection = document.getElementById("score-submit-section");
+
+// 난이도/이름
+document.getElementById("start-button").addEventListener("click", startGame);
+
+// 다음 문제
+nextButton.addEventListener("click", () => {
+  nextButton.classList.add("hidden");
+  feedback.innerText = "";
+  // 다음 문제로
+  loadNextProblem();
+});
+
+function startGame() {
+  playerName = document.getElementById("name-input").value.trim();
+  if(!playerName) {
+    alert("이름을 입력하세요.");
+    return;
+  }
+  difficulty = document.getElementById("difficulty-select").value;
+  const settings = difficultySettings[difficulty];
+  timeLimitPerQuestion = settings.timeLimit;
+  scorePerCorrect = settings.scorePerProblem;
+
+  // 첫 화면 숨기고 퀴즈화면 보이기
+  mainScreen.classList.add("hidden");
+  quizContainer.classList.remove("hidden");
+
+  // 문제 배열 섞기
+  shuffleArray(problems);
+
+  // 각 문제의 보기도 섞어서 correctIndex 재조정
+  problems.forEach(p => shuffleChoices(p));
+
+  // 타이머 시작
+  totalTime = 0;
+  totalTimeInterval = setInterval(() => {
+    totalTime++;
+    updateTotalTimeDisplay();
+  }, 1000);
+
+  // 첫 문제 로드
+  currentProblemIndex = 0;
+  usedCount = 0;
+  allUsed = false;
+  lives = 3;
+  score = 0;
+  updateLivesDisplay();
+  updateScoreDisplay();
+
+  loadNextProblem();
+}
+
+function loadNextProblem() {
+  if(lives <= 0) {
+    endGame();
+    return;
+  }
+
+  // 한 바퀴를 다 돌았다면 allUsed = true
+  if(usedCount >= problems.length) {
+    allUsed = true;
+  }
+
+  // 문제 고르기
+  let problemObj;
+  if(!allUsed) {
+    problemObj = problems[currentProblemIndex];
+    currentProblemIndex++;
+    usedCount++;
+  } else {
+    // 이미 모든 문제 한 바퀴 돌았으니 랜덤으로
+    const randIndex = Math.floor(Math.random()*problems.length);
+    problemObj = problems[randIndex];
+  }
+
+  // 문제 표시
+  questionContainer.innerHTML = problemObj.questionHTML;
+  // 보기 표시
+  choicesContainer.innerHTML = "";
+  problemObj.choices.forEach((choiceText, idx) => {
+    const btn = document.createElement("button");
+    btn.innerHTML = choiceText; 
+    btn.addEventListener("click", () => onChoiceSelected(idx, problemObj));
+    choicesContainer.appendChild(btn);
+  });
+
+  // MathJax 렌더링
+  MathJax.typeset();
+
+  // 타이머(에너지바) 세팅
+  clearInterval(questionTimerInterval);
+  if(timeLimitPerQuestion === Infinity) {
+    energyBar.classList.add("hidden");
+  } else {
+    energyBar.classList.remove("hidden");
+    let remain = timeLimitPerQuestion;
+    updateEnergyBar(1); // 초기 100%
+    questionTimerInterval = setInterval(() => {
+      remain--;
+      const ratio = remain / timeLimitPerQuestion;
+      updateEnergyBar(ratio);
+      if(remain <= 0) {
+        // 시간 초과
+        clearInterval(questionTimerInterval);
+        timeOutHappened();
+      }
+    }, 1000);
+  }
+}
+
+function onChoiceSelected(choiceIdx, problemObj) {
+  clearInterval(questionTimerInterval);
+
+  if(choiceIdx === problemObj.correctIndex) {
+    // 정답
+    score += scorePerCorrect;
+    feedback.innerText = "정답!";
+  } else {
+    // 오답
+    lives--;
+    feedback.innerText = "오답! 정답은: " + problemObj.choices[problemObj.correctIndex];
+  }
+  updateLivesDisplay();
+  updateScoreDisplay();
+
+  if(lives <= 0) {
+    endGame();
+  } else {
+    nextButton.classList.remove("hidden");
+  }
+}
+
+function timeOutHappened() {
+  // 시간초과 => 목숨 1 감소
+  lives--;
+  feedback.innerText = "시간 초과! 기회 1 감소.";
+  updateLivesDisplay();
+  clearInterval(questionTimerInterval);
+  if(lives <= 0) {
+    endGame();
+  } else {
+    nextButton.classList.remove("hidden");
+  }
+}
+
+function updateLivesDisplay() {
+  livesDisplay.innerText = "남은 기회: " + lives;
+}
+
+function updateScoreDisplay() {
+  scoreDisplay.innerText = score;
+}
+
+function updateTotalTimeDisplay() {
+  // totalTime (초)
+  const mm = Math.floor(totalTime / 60);
+  const ss = totalTime % 60;
+  const mmStr = mm < 10 ? "0"+mm : ""+mm;
+  const ssStr = ss < 10 ? "0"+ss : ""+ss;
+  totalTimeDisplay.innerText = "총 경과시간: " + mmStr + ":" + ssStr;
+}
+
+function updateEnergyBar(ratio) {
+  // ratio: 0~1
+  const widthPercent = (ratio*100).toFixed(2)+"%";
+  energyFill.style.width = widthPercent;
+}
+
+function endGame() {
+  clearInterval(questionTimerInterval);
+  clearInterval(totalTimeInterval);
+  quizContainer.classList.add("hidden");
+  gameOverScreen.classList.remove("hidden");
+  finalScoreText.innerText = "최종 점수: " + score + "점";
+}
+
+// 점수 전송
+document.getElementById("score-send-button").addEventListener("click", () => {
+  // 서버로 전송
+  const gameName = "이차방정식 빈출 (4)";
+  saveData(gameName, playerName, score, totalTime);
+  scoreSubmitSection.classList.remove("hidden");
+});
+
+/* shuffle 함수 */
+function shuffleArray(arr) {
+  for(let i=arr.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+/* 보기 섞기 & correctIndex 재설정 */
+function shuffleChoices(problemObj) {
+  const length = problemObj.choices.length;
+  let idxArr = [...Array(length).keys()]; // 0,1,2,3,4 (등)
+  shuffleArray(idxArr);
+  const oldChoices = problemObj.choices;
+  const oldCorrect = problemObj.correctIndex;
+  let newChoices = [];
+  let newCorrect = 0;
+  for(let i=0; i<idxArr.length; i++){
+    newChoices[i] = oldChoices[idxArr[i]];
+    if(idxArr[i] === oldCorrect){
+      newCorrect = i;
+    }
+  }
+  problemObj.choices = newChoices;
+  problemObj.correctIndex = newCorrect;
+}
+
+/* 
+  데이터 전송 함수
+*/
+async function saveData(game, name, score, elapsedTime) {
+  const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+  const requestData = {
+    game,
+    name,
+    score: parseInt(score, 10),
+    elapsedTime: parseInt(elapsedTime, 10)
+  };
+
+  try {
+    const response = await fetch(FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    });
+
+    const responseData = await response.json();
+    if (response.ok) {
+      document.getElementById('response').innerText = 
+        `성공: ${JSON.stringify(responseData, null, 2)}`;
+    } else {
+      document.getElementById('response').innerText = 
+        `오류: ${JSON.stringify(responseData, null, 2)}`;
+    }
+  } catch (error) {
+    console.error('요청 실패:', error);
+    document.getElementById('response').innerText = 
+      `네트워크 오류: ${error.message}`;
+  }
+}
+</script>
+</body>
+</html>
